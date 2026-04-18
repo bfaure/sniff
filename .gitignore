@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Electron builds
+release/
+apps/electron/dist/
+apps/electron/out/
+apps/backend/dist/
+apps/renderer/dist/
+packages/*/dist/
+
+# Databases (contain intercepted user traffic)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Certificates and keys (per-user generated CA)
+*.pem
+*.key
+*.crt
+.sniff-certs/
+
+# Local user data
+.sniff-data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Personal notes / session artifacts
+LEARNINGS.md
+.claude/
+.aider*
+
+# Prisma generated client
+apps/backend/node_modules/.prisma/
+apps/backend/src/generated/
+
+# Worktrees
+sniff-data-worktree/

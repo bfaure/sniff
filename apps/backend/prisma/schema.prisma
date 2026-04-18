@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Exchange {
+  id              String   @id @default(cuid())
+  method          String
+  url             String
+  host            String
+  path            String
+  statusCode      Int?
+  requestHeaders  String   // JSON serialized
+  requestBody     Bytes?
+  responseHeaders String?  // JSON serialized
+  responseBody    Bytes?
+  requestSize     Int
+  responseSize    Int?
+  duration        Int?     // milliseconds
+  tlsVersion      String?
+  timestamp       DateTime @default(now())
+  notes           String?
+  tags            String   @default("[]") // JSON array
+  inScope         Boolean  @default(true)
+  highlighted     Boolean  @default(false)
+  errorMessage    String?  // populated when the proxy couldn't complete the request (DNS failure, TLS error, etc.)
+
+  analyses Analysis[]
+  findings Finding[]
+
+  @@index([host])
+  @@index([timestamp])
+  @@index([method])
+  @@index([statusCode])
+  @@index([errorMessage])
+}
+
+model Analysis {
+  id           String   @id @default(cuid())
+  exchangeId   String
+  exchange     Exchange @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+  modelId      String
+  type         String   // vuln-scan, explain, suggest-followup, generate-payloads, pentest-pathway, chat
+  prompt       String
+  response     String
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float
+  timestamp    DateTime @default(now())
+
+  @@index([exchangeId])
+  @@index([type])
+}
+
+model Finding {
+  id            String   @id @default(cuid())
+  exchangeId    String?
+  exchange      Exchange? @relation(fields: [exchangeId], references: [id], onDelete: SetNull)
+  host          String
+  source        String   // auto-analyzer | assessment | on-demand | manual
+  severity      String   // critical | high | medium | low | info
+  type          String?  // SQLi | XSS | IDOR | ... (free-form)
+  title         String
+  detail        String
+  evidence      String?
+  suggestedTest String?
+  method        String?
+  url           String?
+  categoryName  String?
+  owaspId       String?
+  cvss          Float?
+  cvssVector    String?
+  dedupeKey     String   @unique
+  status        String   @default("open") // open | confirmed | false-positive | fixed
+  escalated     Boolean  @default(false)
+  hits          Int      @default(1) // times this finding has been re-observed
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([host])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+model ScopeRule {
+  id       String  @id @default(cuid())
+  type     String  // include | exclude
+  protocol String? // http | https | *
+  host     String  // glob pattern
+  port     Int?
+  path     String? // glob pattern
+  enabled  Boolean @default(true)
+  order    Int
+
+  @@index([order])
+}
+
+model FuzzerJob {
+  id          String   @id @default(cuid())
+  name        String
+  attackType  String   // single, parallel, paired, cartesian
+  templateReq String   // JSON serialized request template
+  payloads    String   // JSON serialized payload lists
+  status      String   @default("pending") // pending, running, paused, done, cancelled
+  progress    Int      @default(0)
+  total       Int
+  concurrency Int      @default(10)
+  throttleMs  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  results FuzzerResult[]
+}
+
+model FuzzerResult {
+  id           String    @id @default(cuid())
+  jobId        String
+  job          FuzzerJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  payloads     String    // JSON serialized payload values used
+  statusCode   Int
+  responseSize Int
+  duration     Int       // milliseconds
+  responseBody Bytes?
+  interesting  Boolean   @default(false)
+
+  @@index([jobId])
+}
+
+model Settings {
+  key   String @id
+  value String // JSON-encoded, encrypted for sensitive keys
+}
+
+model NoiseFilter {
+  id        String   @id @default(cuid())
+  pattern   String   @unique  // "host|METHOD|/path/{id}" (urlShape key)
+  host      String
+  method    String
+  shape     String            // normalized path portion
+  hitsTotal Int      @default(0)  // total times this pattern was seen
+  reason    String   @default("auto")  // auto | manual
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([host])
+}
+
+model ReplayTab {
+  id        String   @id @default(cuid())
+  name      String
+  method    String
+  url       String
+  headers   String   // raw header text
+  body      String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  history ReplayHistory[]
+
+  @@map("RepeaterTab")
+}
+
+model ReplayHistory {
+  id              String    @id @default(cuid())
+  tabId           String
+  tab             ReplayTab @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  sortOrder       Int
+  method          String
+  url             String
+  headers         String
+  body            String    @default("")
+  statusCode      Int?
+  responseHeaders String?   // JSON serialized
+  responseBody    String?
+  duration        Int?
+  createdAt       DateTime  @default(now())
+
+  @@index([tabId, sortOrder])
+  @@map("RepeaterHistory")
+}
+
+model CostRecord {
+  id           String   @id @default(cuid())
+  modelId      String
+  feature      String   @default("unknown") // auto-triage | auto-deep | assessment | vuln-scan | explain | suggest | payloads | pathway | chat | project-chat | guided-test | chain-analysis | embeddings
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float
+  timestamp    DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([modelId])
+  @@index([feature])
+}

@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* Override Tailwind gray scale so all existing bg-gray-*, text-gray-*, border-gray-* classes
+     automatically adapt to the current theme via CSS custom properties */
+  --color-gray-50: var(--theme-gray-50);
+  --color-gray-100: var(--theme-gray-100);
+  --color-gray-200: var(--theme-gray-200);
+  --color-gray-300: var(--theme-gray-300);
+  --color-gray-400: var(--theme-gray-400);
+  --color-gray-500: var(--theme-gray-500);
+  --color-gray-600: var(--theme-gray-600);
+  --color-gray-700: var(--theme-gray-700);
+  --color-gray-800: var(--theme-gray-800);
+  --color-gray-850: var(--theme-gray-850);
+  --color-gray-900: var(--theme-gray-900);
+  --color-gray-950: var(--theme-gray-950);
+}
+
+/* Dark theme (default) — standard Tailwind gray values */
+:root, .dark {
+  --theme-gray-50: #f9fafb;
+  --theme-gray-100: #f3f4f6;
+  --theme-gray-200: #e5e7eb;
+  --theme-gray-300: #d1d5db;
+  --theme-gray-400: #9ca3af;
+  --theme-gray-500: #6b7280;
+  --theme-gray-600: #4b5563;
+  --theme-gray-700: #374151;
+  --theme-gray-800: #1f2937;
+  --theme-gray-850: #1a2332;
+  --theme-gray-900: #111827;
+  --theme-gray-950: #030712;
+}
+
+/* Light theme — inverted gray scale so dark classes render as light */
+.light {
+  --theme-gray-50: #000000;
+  --theme-gray-100: #0b1220;
+  --theme-gray-200: #111827;
+  --theme-gray-300: #1f2937;
+  --theme-gray-400: #374151;
+  --theme-gray-500: #4b5563;
+  --theme-gray-600: #9ca3af;
+  --theme-gray-700: #e5e7eb;
+  --theme-gray-800: #eef0f3;
+  --theme-gray-850: #f3f4f6;
+  --theme-gray-900: #f9fafb;
+  --theme-gray-950: #ffffff;
+}
+
+/* Prism.js syntax highlighting — dark theme */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #d1d5db;
+}
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #6b7280; }
+.token.punctuation { color: #9ca3af; }
+.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted { color: #f87171; }
+.token.boolean, .token.number { color: #c084fc; }
+.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #34d399; }
+.token.operator, .token.entity, .token.url { color: #67e8f9; }
+.token.atrule, .token.attr-value, .token.keyword { color: #60a5fa; }
+.token.function, .token.class-name { color: #fbbf24; }
+.token.regex, .token.important, .token.variable { color: #fb923c; }
+
+/* AI Test panel prose — uses theme vars so it works in both light and dark */
+.ai-prose {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--theme-gray-200);
+  max-width: none;
+}
+.ai-prose h1, .ai-prose h2, .ai-prose h3, .ai-prose h4, .ai-prose h5, .ai-prose h6 {
+  color: var(--theme-gray-100);
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.ai-prose p {
+  color: var(--theme-gray-200);
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+.ai-prose li {
+  color: var(--theme-gray-200);
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+.ai-prose ol, .ai-prose ul {
+  padding-left: 1.25em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+.ai-prose strong {
+  color: var(--theme-gray-100);
+  font-weight: 600;
+}
+.ai-prose em {
+  color: var(--theme-gray-300);
+}
+.ai-prose a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+.ai-prose blockquote {
+  color: var(--theme-gray-300);
+  border-left: 3px solid var(--theme-gray-600);
+  padding-left: 0.75em;
+  margin-left: 0;
+}
+.ai-prose code {
+  color: #059669;
+  font-size: 0.85em;
+}
+.ai-prose code::before, .ai-prose code::after {
+  content: none;
+}
+.ai-prose pre {
+  background: var(--theme-gray-900);
+  border: 1px solid var(--theme-gray-700);
+  border-radius: 6px;
+  padding: 0.75em;
+  overflow-x: auto;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.ai-prose pre code {
+  color: var(--theme-gray-300);
+  font-size: 0.85em;
+}
+.ai-prose table {
+  color: var(--theme-gray-200);
+}
+.ai-prose th {
+  color: var(--theme-gray-100);
+}
+.ai-prose td {
+  color: var(--theme-gray-200);
+}
+.ai-prose hr {
+  border-color: var(--theme-gray-700);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-gray-950);
+    color: var(--color-gray-100);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Menlo', monospace;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: var(--color-gray-900);
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-gray-700);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-gray-600);
+  }
+}

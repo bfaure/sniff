@@ -1,0 +1,83 @@
+{
+  "name": "@sniff/electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sniff - LLM-integrated interception proxy",
+  "homepage": "https://github.com/bfaure/sniff",
+  "author": {
+    "name": "Brian Faure",
+    "email": "bfaure23@gmail.com",
+    "url": "https://github.com/bfaure/sniff"
+  },
+  "main": "./dist/main.js",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "package": "electron-builder",
+    "package:mac": "electron-builder --mac",
+    "package:win": "electron-builder --win",
+    "package:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "@sniff/backend": "*",
+    "electron-is-dev": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "electron": "35.0.1",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "build": {
+    "appId": "dev.sniff.app",
+    "productName": "Sniff",
+    "electronVersion": "35.0.1",
+    "directories": {
+      "output": "../../release",
+      "buildResources": "build"
+    },
+    "artifactName": "Sniff-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../renderer/dist",
+        "to": "renderer"
+      },
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": ["src/**/*", "prisma/**/*", "package.json", "!**/*.test.ts"]
+      }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "category": "Development"
+    },
+    "publish": null
+  }
+}

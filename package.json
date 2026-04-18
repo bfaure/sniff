@@ -1,0 +1,33 @@
+{
+  "name": "sniff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LLM-integrated interception proxy for paired pentesting",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "build": "bash scripts/build.sh",
+    "test": "npm run test:unit && npm run test:proxy",
+    "test:unit": "vitest run",
+    "test:proxy": "vitest run --project backend-integration",
+    "test:e2e": "playwright test",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/js-beautify": "^1.14.3",
+    "@types/prismjs": "^1.26.6",
+    "js-beautify": "^1.15.4",
+    "prismjs": "^1.30.0",
+    "react-markdown": "^10.1.0"
+  }
+}
