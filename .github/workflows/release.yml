@@ -60,6 +60,9 @@ jobs:
         working-directory: apps/electron
         run: npx tsc
 
+      - name: Stage electron app dir
+        run: node scripts/stage-electron.mjs
+
       - name: Package (macOS)
         if: matrix.os == 'macos-latest'
         run: npx electron-builder --mac --publish never
