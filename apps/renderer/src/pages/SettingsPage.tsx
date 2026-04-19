@@ -43,13 +43,36 @@ export function SettingsPage() {
   // "Set me up" IAM tutorial modal
   const [setupOpen, setSetupOpen] = useState(false);
 
+  // Saved-credential status (separate from the form state so we can show
+  // "saved ending in ...ABCD" and offer a Clear button).
+  const [credStatus, setCredStatus] = useState<{ hasAccessKeyId: boolean; hasSecretAccessKey: boolean; accessKeyIdSuffix: string } | null>(null);
+
   // Load settings on mount
   useEffect(() => {
     loadSettings();
     loadCosts();
     loadRAGStatus();
     loadNoiseFilters();
+    loadCredStatus();
   }, []);
+
+  const loadCredStatus = async () => {
+    try {
+      const s = await api.settings.getBedrockCredentialStatus();
+      setCredStatus({ hasAccessKeyId: s.hasAccessKeyId, hasSecretAccessKey: s.hasSecretAccessKey, accessKeyIdSuffix: s.accessKeyIdSuffix });
+      if (s.region) setBedrockRegion(s.region);
+    } catch { /* not critical */ }
+  };
+
+  const clearCredentials = async () => {
+    if (!confirm('Remove saved AWS Bedrock credentials? You can re-enter them any time.')) return;
+    try {
+      await api.settings.clearBedrockCredentials();
+      setBedrockKeyId('');
+      setBedrockSecret('');
+      setCredStatus({ hasAccessKeyId: false, hasSecretAccessKey: false, accessKeyIdSuffix: '' });
+    } catch { /* swallow */ }
+  };
 
   const loadNoiseFilters = async () => {
     try {
@@ -72,8 +95,8 @@ export function SettingsPage() {
         api.settings.getLLMConfig(),
       ]);
 
-      // Credentials (masked values from backend)
-      if (allSettings.bedrock_access_key_id) setBedrockKeyId(allSettings.bedrock_access_key_id);
+      // Region is non-sensitive; the saved-credential indicator handles
+      // showing whether a key/secret exist (don't pre-fill bullet chars).
       if (allSettings.bedrock_region) setBedrockRegion(allSettings.bedrock_region);
 
       // LLM config
@@ -106,17 +129,25 @@ export function SettingsPage() {
     api.llm.getCostBreakdown(breakdownScope).then(setCostBreakdown).catch(() => {});
   }, [breakdownScope]);
 
+  // Persist any freshly-typed credentials from the form. Returns true if
+  // something was saved (or already on file), false if the form is empty.
+  const persistFormCredentials = async (): Promise<boolean> => {
+    const creds: { accessKeyId?: string; secretAccessKey?: string; region?: string } = {
+      region: bedrockRegion,
+    };
+    // Only send credentials if they're not the masked placeholder
+    if (bedrockKeyId && bedrockKeyId !== '••••••••') creds.accessKeyId = bedrockKeyId;
+    if (bedrockSecret && bedrockSecret !== '••••••••') creds.secretAccessKey = bedrockSecret;
+
+    await api.settings.saveBedrockCredentials(creds);
+    await loadCredStatus();
+    return Boolean(creds.accessKeyId || creds.secretAccessKey || credStatus?.hasAccessKeyId);
+  };
+
   const saveCredentials = async () => {
     setCredentialStatus('saving');
     try {
-      const creds: { accessKeyId?: string; secretAccessKey?: string; region?: string } = {
-        region: bedrockRegion,
-      };
-      // Only send credentials if they're not the masked placeholder
-      if (bedrockKeyId && bedrockKeyId !== '••••••••') creds.accessKeyId = bedrockKeyId;
-      if (bedrockSecret && bedrockSecret !== '••••••••') creds.secretAccessKey = bedrockSecret;
-
-      await api.settings.saveBedrockCredentials(creds);
+      await persistFormCredentials();
       setCredentialStatus('saved');
       setTimeout(() => setCredentialStatus('idle'), 2000);
     } catch {
@@ -128,6 +159,11 @@ export function SettingsPage() {
     setTestStatus('testing');
     setTestError('');
     try {
+      // If the user typed creds but hasn't clicked Save, persist them first so
+      // the backend actually has something to test with. Otherwise we'd test
+      // with whatever was already on file (or nothing, which is confusing).
+      await persistFormCredentials();
+
       const result = await api.settings.testBedrock();
       if (result.success) {
         setTestStatus('success');
@@ -239,15 +275,32 @@ export function SettingsPage() {
           Provide AWS credentials with Bedrock access, or leave blank to use the default credential chain (~/.aws/credentials, IAM role, etc.)
         </p>
         <div className="space-y-3">
+          {credStatus?.hasAccessKeyId && (
+            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded px-3 py-2 text-xs">
+              <span className="text-emerald-400">●</span>
+              <span className="text-gray-400">
+                Saved credentials on file
+                {credStatus.accessKeyIdSuffix && (
+                  <span className="text-gray-500 font-mono"> (key ID …{credStatus.accessKeyIdSuffix})</span>
+                )}
+              </span>
+              <button
+                onClick={clearCredentials}
+                className="ml-auto px-2 py-0.5 rounded bg-red-900 hover:bg-red-800 text-red-300 text-[11px]"
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <div>
             <label className="text-xs text-gray-500 block mb-1">Access Key ID</label>
             <input
               type="password"
               value={bedrockKeyId}
               onChange={(e) => setBedrockKeyId(e.target.value)}
-              onFocus={(e) => { if (e.target.value === '••••••••') e.target.value = ''; setBedrockKeyId(''); }}
+              onFocus={() => { if (bedrockKeyId === '••••••••') setBedrockKeyId(''); }}
               className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-sm text-gray-300 w-80 font-mono focus:outline-none focus:border-emerald-600"
-              placeholder="AKIA... (leave blank for default chain)"
+              placeholder={credStatus?.hasAccessKeyId ? 'Leave blank to keep existing key' : 'AKIA...'}
             />
           </div>
           <div>
@@ -256,9 +309,9 @@ export function SettingsPage() {
               type="password"
               value={bedrockSecret}
               onChange={(e) => setBedrockSecret(e.target.value)}
-              onFocus={(e) => { if (e.target.value === '••••••••') e.target.value = ''; setBedrockSecret(''); }}
+              onFocus={() => { if (bedrockSecret === '••••••••') setBedrockSecret(''); }}
               className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-sm text-gray-300 w-80 font-mono focus:outline-none focus:border-emerald-600"
-              placeholder="wJalr... (leave blank for default chain)"
+              placeholder={credStatus?.hasSecretAccessKey ? 'Leave blank to keep existing secret' : 'wJalr...'}
             />
           </div>
           <div>

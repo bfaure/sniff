@@ -206,6 +206,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(creds),
       }),
+    getBedrockCredentialStatus: () =>
+      request<{ hasAccessKeyId: boolean; hasSecretAccessKey: boolean; region: string; accessKeyIdSuffix: string }>(
+        '/api/settings/bedrock-credentials/status',
+      ),
+    clearBedrockCredentials: () =>
+      request<{ cleared: boolean }>('/api/settings/bedrock-credentials', { method: 'DELETE' }),
     testBedrock: () =>
       request<{ success: boolean; modelId?: string; costUsd?: number; error?: string }>('/api/settings/bedrock-test', {
         method: 'POST',

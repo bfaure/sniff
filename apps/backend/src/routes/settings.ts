@@ -21,6 +21,33 @@ export function settingsRoutes(fastify: FastifyInstance) {
     return result;
   });
 
+  // Report whether Bedrock credentials are saved (without leaking the values)
+  fastify.get('/api/settings/bedrock-credentials/status', async () => {
+    const rows = await db.settings.findMany({
+      where: { key: { in: ['bedrock_access_key_id', 'bedrock_secret_access_key', 'bedrock_region'] } },
+    });
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    const keyId = byKey.bedrock_access_key_id || '';
+    return {
+      hasAccessKeyId: !!keyId,
+      hasSecretAccessKey: !!byKey.bedrock_secret_access_key,
+      region: byKey.bedrock_region || '',
+      // Last 4 of the key ID so the user can tell which credential is stored.
+      accessKeyIdSuffix: keyId ? keyId.slice(-4) : '',
+    };
+  });
+
+  // Delete saved Bedrock credentials
+  fastify.delete('/api/settings/bedrock-credentials', async () => {
+    await db.settings.deleteMany({
+      where: { key: { in: ['bedrock_access_key_id', 'bedrock_secret_access_key'] } },
+    });
+    // Clear the env vars so the running server forgets them immediately.
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    return { cleared: true };
+  });
+
   // Update a setting
   fastify.put('/api/settings/:key', async (req) => {
     const { key } = req.params as { key: string };
