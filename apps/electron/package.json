@@ -1,6 +1,6 @@
 {
   "name": "@sniff/electron",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Sniff - LLM-integrated interception proxy",
   "homepage": "https://github.com/bfaure/sniff",

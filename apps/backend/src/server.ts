@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
 import { config } from './config.js';
 import { ProxyEngine } from './proxy/engine.js';
 import { wsHub } from './ws/hub.js';
@@ -45,10 +46,19 @@ async function ensureSchema(): Promise<void> {
     return;
   }
   const sql = fs.readFileSync(schemaPath, 'utf8');
+  // Split on `;` at end of line, then for each chunk strip leading comment
+  // lines (the generated schema prefixes each DDL with `-- CreateTable` etc.)
+  // before deciding if there's any real SQL to execute.
   const statements = sql
     .split(/;\s*\n/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith('--'));
+    .map((s) =>
+      s
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('--'))
+        .join('\n')
+        .trim(),
+    )
+    .filter((s) => s.length > 0);
   for (const stmt of statements) {
     await db.$executeRawUnsafe(stmt);
   }
@@ -149,6 +159,23 @@ export async function createServer() {
 
   // Health check
   fastify.get('/api/health', async () => ({ status: 'ok' }));
+
+  // Serve the renderer static assets when the packaged Electron main hands
+  // us a directory via SNIFF_RENDERER_DIR. We serve from the same origin as
+  // the API so the renderer's relative `/api/*` fetches and the `/ws`
+  // WebSocket upgrade work without CORS config or an extra port. In dev,
+  // Vite serves the renderer at :5173 and proxies to us — this block is
+  // inert there since SNIFF_RENDERER_DIR is unset.
+  const rendererDir = process.env.SNIFF_RENDERER_DIR;
+  if (rendererDir && fs.existsSync(rendererDir)) {
+    await fastify.register(fastifyStatic, {
+      root: rendererDir,
+      prefix: '/',
+      // Don't intercept /api or /ws — let the explicit routes win.
+      decorateReply: false,
+    });
+    console.log(`[server] serving renderer from ${rendererDir}`);
+  }
 
   // Auto-start proxy on server boot
   engine.start().then(() => {

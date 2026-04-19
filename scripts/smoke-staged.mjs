@@ -14,6 +14,7 @@ fs.mkdirSync(path.dirname(TMP_DB), { recursive: true });
 
 process.env.DATABASE_URL = `file:${TMP_DB.replace(/\\/g, '/')}`;
 process.env.SNIFF_SERVER_PORT = '47999';
+process.env.SNIFF_RENDERER_DIR = path.resolve(HERE, '..', 'apps', 'renderer', 'dist');
 
 console.log('[smoke] ELECTRON_NM=', ELECTRON_NM);
 console.log('[smoke] DATABASE_URL=', process.env.DATABASE_URL);
@@ -39,8 +40,12 @@ console.log('[smoke] starting fastify listen…');
 await fastify.listen({ port: 47999, host: '127.0.0.1' });
 console.log('[smoke] fastify listening — test endpoint…');
 
-const res = await fetch('http://127.0.0.1:47999/api/health');
+const res = await fetch('http://127.0.0.1:47999/api/health', { headers: { host: 'localhost:47999' } });
 console.log('[smoke] /api/health status:', res.status, 'body:', await res.text());
+
+const indexRes = await fetch('http://127.0.0.1:47999/', { headers: { host: 'localhost:47999' } });
+const indexBody = await indexRes.text();
+console.log('[smoke] GET / status:', indexRes.status, 'has-root-div:', indexBody.includes('<div id="root">'));
 
 await fastify.close();
 console.log('[smoke] OK');

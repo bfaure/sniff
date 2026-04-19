@@ -10,15 +10,13 @@ const RENDERER_DEV_PORT = 5173;
 
 // Packaged app lives at resources/app/ (asar disabled — see electron-builder.yml
 // for why). Renderer static assets ship separately at resources/renderer/ via
-// extraResources so the main process can mainWindow.loadFile() them directly.
+// extraResources; we hand that path to the backend so Fastify serves them at
+// the same origin as the API, sidestepping file:// + /api + /ws breakage.
 const RESOURCES_DIR = isDev ? path.join(__dirname, '..') : process.resourcesPath;
 
-function rendererIndexPath(): string {
-  if (isDev) {
-    // Not used in dev (we load the Vite dev URL), but kept for completeness.
-    return path.join(__dirname, '..', '..', 'renderer', 'dist', 'index.html');
-  }
-  return path.join(RESOURCES_DIR, 'renderer', 'index.html');
+function rendererDir(): string {
+  if (isDev) return path.join(__dirname, '..', '..', 'renderer', 'dist');
+  return path.join(RESOURCES_DIR, 'renderer');
 }
 
 function configureBackendEnv(): void {
@@ -28,6 +26,9 @@ function configureBackendEnv(): void {
   // Prisma file URL on Windows must use forward slashes.
   process.env.DATABASE_URL = `file:${dbPath.replace(/\\/g, '/')}`;
   process.env.SNIFF_SERVER_PORT = String(SERVER_PORT);
+  // Tell the backend to serve the renderer. In dev we skip this so Vite's
+  // :5173 dev server stays the single source of truth for the UI.
+  if (!isDev) process.env.SNIFF_RENDERER_DIR = rendererDir();
 }
 
 async function startBackend() {
@@ -68,7 +69,8 @@ function createWindow() {
     mainWindow.loadURL(`http://localhost:${RENDERER_DEV_PORT}`);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(rendererIndexPath());
+    // Serve the renderer from the backend (same origin as /api and /ws).
+    mainWindow.loadURL(`http://127.0.0.1:${SERVER_PORT}/`);
   }
 
   mainWindow.on('closed', () => {
