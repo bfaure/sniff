@@ -1,6 +1,6 @@
 {
   "name": "sniff",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "LLM-integrated interception proxy for paired pentesting",
   "workspaces": [

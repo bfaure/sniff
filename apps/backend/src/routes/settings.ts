@@ -169,7 +169,7 @@ export function settingsRoutes(fastify: FastifyInstance) {
   });
 }
 
-async function applyBedrockCredentials() {
+export async function applyBedrockCredentials() {
   const rows = await db.settings.findMany({
     where: {
       key: { in: ['bedrock_access_key_id', 'bedrock_secret_access_key', 'bedrock_region'] },

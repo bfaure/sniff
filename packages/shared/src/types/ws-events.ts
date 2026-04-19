@@ -10,7 +10,7 @@ export type WSEvent =
   | { type: 'fuzzer:progress'; data: { jobId: string; completed: number; total: number } }
   | { type: 'fuzzer:result'; data: FuzzerResultData }
   | { type: 'llm:chunk'; data: { streamId: string; text: string } }
-  | { type: 'llm:done'; data: { streamId: string; modelId: string; inputTokens: number; outputTokens: number; costUsd: number; error?: string } }
+  | { type: 'llm:done'; data: { streamId: string; modelId: string; inputTokens: number; outputTokens: number; costUsd: number; error?: string; errorCode?: string } }
   | { type: 'llm:finding'; data: { exchangeId: string; severity: 'critical' | 'high' | 'medium' | 'low' | 'info'; title: string; detail: string; method: string; url: string; escalated?: boolean } }
   | { type: 'finding:new'; data: {
       id: string;

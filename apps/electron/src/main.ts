@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -58,12 +58,14 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'Sniff',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  mainWindow.setMenuBarVisibility(false);
 
   if (isDev) {
     mainWindow.loadURL(`http://localhost:${RENDERER_DEV_PORT}`);
@@ -114,6 +116,8 @@ function showFatal(err: unknown): void {
 
 app.whenReady().then(async () => {
   try {
+    // Drop the default File/Edit/View/... menu. Our UI is fully custom.
+    Menu.setApplicationMenu(null);
     setupIPC();
     await startBackend();
     createWindow();

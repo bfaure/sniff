@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { appEvents } from '../../events/appEvents';
 import { useNavigate } from '../../App';
 import type { AnalysisType } from '@sniff/shared';
+import { LLMNotConfigured, isLLMNotConfigured } from './LLMNotConfigured';
 
 interface AnalysisPanelProps {
   exchangeId: string;
@@ -55,7 +56,7 @@ function stripActionBlocks(text: string): string {
 }
 
 export function AnalysisPanel({ exchangeId }: AnalysisPanelProps) {
-  const { streaming, text, error, modelId, inputTokens, outputTokens, costUsd, analyze, reset } = useLLMStream();
+  const { streaming, text, error, errorCode, modelId, inputTokens, outputTokens, costUsd, analyze, reset } = useLLMStream();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>([]);
@@ -183,7 +184,11 @@ export function AnalysisPanel({ exchangeId }: AnalysisPanelProps) {
                   </span>
                 )}
               </div>
-              {error && <div className="text-red-400 text-sm">{error}</div>}
+              {error && (
+                isLLMNotConfigured(error, errorCode)
+                  ? <LLMNotConfigured />
+                  : <div className="text-red-400 text-sm">{error}</div>
+              )}
               <pre className="bg-gray-900 rounded p-3 text-xs text-gray-300 whitespace-pre-wrap break-words max-h-96 overflow-auto">
                 {text || '...'}
               </pre>

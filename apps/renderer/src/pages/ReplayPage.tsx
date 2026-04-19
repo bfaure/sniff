@@ -9,6 +9,7 @@ import { js_beautify, html_beautify, css_beautify } from 'js-beautify';
 import { api } from '../api/client';
 import { ContextMenu } from '../components/shared/ContextMenu';
 import { StatusBadge } from '../components/shared/StatusBadge';
+import { LLMNotConfigured, isLLMNotConfigured } from '../components/shared/LLMNotConfigured';
 import { appEvents } from '../events/appEvents';
 import { useLLMStream } from '../hooks/useLLMStream';
 import { buildScopeOptions, checkExistingCoverage, type ScopeOption, type ScopeRule } from '../utils/scopeOptions';
@@ -139,6 +140,60 @@ function parseProposedTest(content: string): ProposedTest | null {
 function stripProposedTest(content: string): string {
   return content.replace(/```proposed-test\s*\n[\s\S]*?\n```/g, '').trimEnd();
 }
+
+/**
+ * Chat input sidebar for the AI Test panel. Holds its own draft text in local
+ * state so keystrokes do NOT bubble a re-render up to ReplayPage, which
+ * re-renders the full conversation and is expensive (markdown per turn).
+ *
+ * The parent seeds a prefill value (e.g., after "Apply Test") via the
+ * `prefill` prop. We key off `prefill.seq` so repeated prefills of the same
+ * text still overwrite the draft.
+ */
+const GuidedChatInput = React.memo(function GuidedChatInput(props: {
+  disabled: boolean;
+  prefill: { seq: number; text: string };
+  onSend: (text: string) => void;
+}) {
+  const [value, setValue] = useState(props.prefill.text);
+  const lastSeq = useRef(props.prefill.seq);
+  useEffect(() => {
+    if (props.prefill.seq !== lastSeq.current) {
+      lastSeq.current = props.prefill.seq;
+      setValue(props.prefill.text);
+    }
+  }, [props.prefill]);
+  const canSend = !props.disabled && value.trim().length > 0;
+  const send = () => {
+    if (!canSend) return;
+    props.onSend(value);
+    setValue('');
+  };
+  return (
+    <div className="w-64 border-l border-gray-800 flex flex-col p-2 shrink-0">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        placeholder="Report results or ask a follow-up... (⌘+Enter)"
+        disabled={props.disabled}
+        className="flex-1 bg-gray-900 border border-gray-800 rounded p-2 text-sm text-gray-200 resize-none focus:outline-none focus:border-purple-600 disabled:opacity-50"
+      />
+      <button
+        onClick={send}
+        disabled={!canSend}
+        className="mt-1.5 w-full px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium"
+      >
+        Send
+      </button>
+    </div>
+  );
+});
 
 export function ReplayPage() {
   const [tabs, _setTabs] = useState<ReplayTab[]>(() => persistedTabs || []);
@@ -384,10 +439,21 @@ export function ReplayPage() {
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
   }, [preApplySnapshot]);
 
-  const [guidedInput, setGuidedInput] = useState('');
+  // Prefill seed the chat input can read on change (e.g., after Apply Test).
+  // The actual input value lives inside GuidedChatInput so keystrokes don't
+  // re-render this whole page (Markdown in each past turn is expensive).
+  const [guidedInputPrefill, setGuidedInputPrefill] = useState({ seq: 0, text: '' });
+  const setGuidedInput = (text: string) => setGuidedInputPrefill((p) => ({ seq: p.seq + 1, text }));
   const llm = useLLMStream();
   const lastStreamTabRef = useRef<string | null>(null);
   const turns = activeTab ? (guidedHistory[activeTab.id] || []) : [];
+  // Auto-scroll the conversation to the bottom as new content streams/commits.
+  const convoRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = convoRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [turns.length, llm.streaming, llm.text]);
 
   // When a stream finishes, append the assistant turn to this tab's history
   useEffect(() => {
@@ -441,16 +507,15 @@ export function ReplayPage() {
     await llm.guidedTest(vt, ex);
   };
 
-  const sendGuidedFollowup = async () => {
-    const text = guidedInput.trim();
-    if (!text || llm.streaming) return;
-    const newHistory: GuidedTurn[] = [...turns, { role: 'user', content: text }];
+  const sendGuidedFollowup = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || llm.streaming) return;
+    const newHistory: GuidedTurn[] = [...turns, { role: 'user', content: trimmed }];
     setGuidedHistory((prev) => ({ ...prev, [activeTab.id]: newHistory }));
-    setGuidedInput('');
     const ex = buildExchangeForGuided();
     lastStreamTabRef.current = activeTab.id;
     const vt = guidedMode === 'guided' ? guidedVulnType : undefined;
-    await llm.guidedTest(vt, ex, text, newHistory.slice(0, -1));
+    await llm.guidedTest(vt, ex, trimmed, newHistory.slice(0, -1));
   };
 
   // Listen for "Send to Replay" events from other pages
@@ -1110,7 +1175,7 @@ export function ReplayPage() {
           {/* Content */}
           <div className="flex-1 flex overflow-hidden">
             {/* Conversation */}
-            <div className="flex-1 overflow-auto px-4 py-3 space-y-4 text-sm">
+            <div ref={convoRef} className="flex-1 overflow-auto px-4 py-3 space-y-4 text-sm">
               {turns.length === 0 && !llm.streaming && (
                 <div className="text-gray-500 text-xs">
                   {guidedMode === 'guided'
@@ -1190,33 +1255,19 @@ export function ReplayPage() {
                 );
               })()}
               {llm.error && (
-                <div className="text-red-400 text-xs">Error: {llm.error}</div>
+                isLLMNotConfigured(llm.error, llm.errorCode)
+                  ? <LLMNotConfigured inline />
+                  : <div className="text-red-400 text-xs">Error: {llm.error}</div>
               )}
             </div>
 
-            {/* Input sidebar */}
-            <div className="w-64 border-l border-gray-800 flex flex-col p-2 shrink-0">
-              <textarea
-                value={guidedInput}
-                onChange={(e) => setGuidedInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    sendGuidedFollowup();
-                  }
-                }}
-                placeholder="Report results or ask a follow-up... (⌘+Enter)"
-                disabled={llm.streaming || turns.length === 0}
-                className="flex-1 bg-gray-900 border border-gray-800 rounded p-2 text-sm text-gray-200 resize-none focus:outline-none focus:border-purple-600 disabled:opacity-50"
-              />
-              <button
-                onClick={sendGuidedFollowup}
-                disabled={llm.streaming || !guidedInput.trim() || turns.length === 0}
-                className="mt-1.5 w-full px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium"
-              >
-                Send
-              </button>
-            </div>
+            {/* Input sidebar — extracted so keystrokes don't rerender the
+                conversation list (which re-renders markdown on each message). */}
+            <GuidedChatInput
+              disabled={llm.streaming || turns.length === 0}
+              prefill={guidedInputPrefill}
+              onSend={sendGuidedFollowup}
+            />
           </div>
         </div>
       )}

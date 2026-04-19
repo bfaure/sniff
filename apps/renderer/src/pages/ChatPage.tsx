@@ -4,6 +4,7 @@ import { useLLMStream } from '../hooks/useLLMStream';
 import { useNavigate } from '../App';
 import { appEvents } from '../events/appEvents';
 import { api } from '../api/client';
+import { LLMNotConfigured, isLLMNotConfigured } from '../components/shared/LLMNotConfigured';
 
 const CHAT_STORAGE_KEY = 'ui_chat_history';
 const MAX_PERSISTED_MESSAGES = 100;
@@ -45,7 +46,7 @@ const QUICK_PROMPTS = [
 ];
 
 export function ChatPage() {
-  const { streaming, text, error, modelId, inputTokens, outputTokens, costUsd, projectChat, reset } = useLLMStream();
+  const { streaming, text, error, errorCode, modelId, inputTokens, outputTokens, costUsd, projectChat, reset } = useLLMStream();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [input, setInput] = useState('');
@@ -253,7 +254,9 @@ export function ChatPage() {
           )}
 
           {error && (
-            <div className="text-red-400 text-xs bg-red-950/30 rounded px-3 py-2">{error}</div>
+            isLLMNotConfigured(error, errorCode)
+              ? <LLMNotConfigured />
+              : <div className="text-red-400 text-xs bg-red-950/30 rounded px-3 py-2">{error}</div>
           )}
 
           <div ref={chatEndRef} />

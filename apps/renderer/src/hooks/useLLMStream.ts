@@ -7,6 +7,7 @@ interface LLMStreamState {
   streaming: boolean;
   text: string;
   error: string | null;
+  errorCode: string | null;
   modelId: string | null;
   inputTokens: number;
   outputTokens: number;
@@ -18,6 +19,7 @@ export function useLLMStream() {
     streaming: false,
     text: '',
     error: null,
+    errorCode: null,
     modelId: null,
     inputTokens: 0,
     outputTokens: 0,
@@ -37,7 +39,7 @@ export function useLLMStream() {
 
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    setState({ streaming: true, text: '', error: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    setState({ streaming: true, text: '', error: null, errorCode: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
     const unsubChunk = wsClient.on('llm:chunk', (data) => {
       if (data.streamId === streamId) {
@@ -55,6 +57,7 @@ export function useLLMStream() {
           outputTokens: data.outputTokens,
           costUsd: data.costUsd,
           error: data.error || null,
+          errorCode: data.errorCode || null,
         }));
         unsubChunk();
         unsubDone();
@@ -81,7 +84,7 @@ export function useLLMStream() {
 
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    setState({ streaming: true, text: '', error: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    setState({ streaming: true, text: '', error: null, errorCode: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
     const unsubChunk = wsClient.on('llm:chunk', (data) => {
       if (data.streamId === streamId) {
@@ -99,6 +102,7 @@ export function useLLMStream() {
           outputTokens: data.outputTokens,
           costUsd: data.costUsd,
           error: data.error || null,
+          errorCode: data.errorCode || null,
         }));
         unsubChunk();
         unsubDone();
@@ -134,7 +138,7 @@ export function useLLMStream() {
 
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    setState({ streaming: true, text: '', error: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    setState({ streaming: true, text: '', error: null, errorCode: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
     const unsubChunk = wsClient.on('llm:chunk', (data) => {
       if (data.streamId === streamId) {
@@ -152,6 +156,7 @@ export function useLLMStream() {
           outputTokens: data.outputTokens,
           costUsd: data.costUsd,
           error: data.error || null,
+          errorCode: data.errorCode || null,
         }));
         unsubChunk();
         unsubDone();
@@ -172,7 +177,7 @@ export function useLLMStream() {
   const chainAnalysis = useCallback(async (host: string) => {
     cleanupRef.current?.();
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setState({ streaming: true, text: '', error: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    setState({ streaming: true, text: '', error: null, errorCode: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
     const unsubChunk = wsClient.on('llm:chunk', (data) => {
       if (data.streamId === streamId) {
@@ -189,6 +194,7 @@ export function useLLMStream() {
           outputTokens: data.outputTokens,
           costUsd: data.costUsd,
           error: data.error || null,
+          errorCode: data.errorCode || null,
         }));
         unsubChunk();
         unsubDone();
@@ -207,7 +213,7 @@ export function useLLMStream() {
 
   const reset = useCallback(() => {
     cleanupRef.current?.();
-    setState({ streaming: false, text: '', error: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    setState({ streaming: false, text: '', error: null, errorCode: null, modelId: null, inputTokens: 0, outputTokens: 0, costUsd: 0 });
   }, []);
 
   return { ...state, analyze, projectChat, guidedTest, chainAnalysis, reset };

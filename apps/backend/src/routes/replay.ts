@@ -1,7 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import * as http from 'http';
 import * as https from 'https';
+import * as zlib from 'zlib';
 import { db } from '../db.js';
+
+// Decompress an upstream response body based on its Content-Encoding. Browsers
+// do this transparently; Node's http client does not. Without this, replayed
+// responses come back as gzipped bytes with a `Content-Encoding: gzip` header,
+// which the UI then tries (and fails) to render as text.
+function decodeBody(encoding: string | undefined, buf: Buffer): Buffer {
+  const enc = (encoding || '').toLowerCase().trim();
+  try {
+    if (enc === 'gzip' || enc === 'x-gzip') return zlib.gunzipSync(buf);
+    if (enc === 'deflate') return zlib.inflateSync(buf);
+    if (enc === 'br') return zlib.brotliDecompressSync(buf);
+  } catch {
+    // Corrupt / truncated — fall through to raw bytes.
+  }
+  return buf;
+}
 
 interface ReplayRequest {
   method: string;
@@ -80,6 +97,18 @@ export function replayRoutes(fastify: FastifyInstance): void {
     const isHttps = parsedUrl.protocol === 'https:';
     const transport = isHttps ? https : http;
 
+    // Recompute Content-Length from the actual body bytes. The body shown in
+    // the UI may have been edited after capture; forwarding a stale length
+    // desyncs from what we're about to write and makes servers misbehave.
+    // We match any case variant of the header name.
+    const outHeaders = { ...headers };
+    for (const k of Object.keys(outHeaders)) {
+      if (k.toLowerCase() === 'content-length') delete outHeaders[k];
+    }
+    if (body != null && body.length > 0) {
+      outHeaders['Content-Length'] = String(Buffer.byteLength(body, 'utf-8'));
+    }
+
     const startTime = Date.now();
 
     try {
@@ -96,19 +125,26 @@ export function replayRoutes(fastify: FastifyInstance): void {
             port: parsedUrl.port || (isHttps ? 443 : 80),
             path: parsedUrl.pathname + parsedUrl.search,
             method,
-            headers,
+            headers: outHeaders,
             rejectUnauthorized: false,
           },
           (res) => {
             const chunks: Buffer[] = [];
             res.on('data', (chunk: Buffer) => chunks.push(chunk));
             res.on('end', () => {
-              const buf = Buffer.concat(chunks);
+              const raw = Buffer.concat(chunks);
+              const decoded = decodeBody(res.headers['content-encoding'] as string | undefined, raw);
+              // Strip headers that described the wire encoding — we return
+              // decoded bytes, so both Content-Encoding and the old
+              // Content-Length no longer apply.
+              const outHeaders: Record<string, string | string[] | undefined> = { ...res.headers };
+              delete outHeaders['content-encoding'];
+              delete outHeaders['content-length'];
               resolve({
                 statusCode: res.statusCode || 0,
-                headers: res.headers,
-                body: buf.toString('utf-8'),
-                bodyBase64: buf.toString('base64'),
+                headers: outHeaders,
+                body: decoded.toString('utf-8'),
+                bodyBase64: decoded.toString('base64'),
                 duration: Date.now() - startTime,
               });
             });

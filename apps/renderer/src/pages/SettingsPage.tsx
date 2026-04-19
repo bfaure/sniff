@@ -40,6 +40,9 @@ export function SettingsPage() {
   // Noise filters
   const [noiseFilters, setNoiseFilters] = useState<Array<{ id: string; pattern: string; host: string; method: string; shape: string; hitsTotal: number; reason: string; enabled: boolean; createdAt: string }>>([]);
 
+  // "Set me up" IAM tutorial modal
+  const [setupOpen, setSetupOpen] = useState(false);
+
   // Load settings on mount
   useEffect(() => {
     loadSettings();
@@ -223,7 +226,15 @@ export function SettingsPage() {
 
       {/* LLM Credentials */}
       <section className="mb-8">
-        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">LLM — AWS Bedrock</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">LLM — AWS Bedrock</h3>
+          <button
+            onClick={() => setSetupOpen(true)}
+            className="px-3 py-1 rounded text-xs bg-blue-700 hover:bg-blue-600 text-white font-medium"
+          >
+            Set me up
+          </button>
+        </div>
         <p className="text-xs text-gray-600 mb-3">
           Provide AWS credentials with Bedrock access, or leave blank to use the default credential chain (~/.aws/credentials, IAM role, etc.)
         </p>
@@ -607,6 +618,123 @@ export function SettingsPage() {
           Download CA Certificate
         </button>
       </section>
+
+      {setupOpen && <BedrockSetupModal onClose={() => setSetupOpen(false)} />}
+    </div>
+  );
+}
+
+function BedrockSetupModal({ onClose }: { onClose: () => void }) {
+  const policyJson = JSON.stringify(
+    {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'SniffBedrockInvoke',
+          Effect: 'Allow',
+          Action: [
+            'bedrock:InvokeModel',
+            'bedrock:InvokeModelWithResponseStream',
+          ],
+          Resource: [
+            'arn:aws:bedrock:*::foundation-model/anthropic.claude-*',
+            'arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-*',
+          ],
+        },
+      ],
+    },
+    null,
+    2,
+  );
+
+  const [copied, setCopied] = React.useState(false);
+  const copyPolicy = async () => {
+    try {
+      await navigator.clipboard.writeText(policyJson);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-lg max-w-2xl w-full max-h-[85vh] overflow-auto p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-gray-200">Create a narrow-scope AWS IAM credential</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+        </div>
+
+        <p className="text-xs text-gray-400 mb-4">
+          Sniff only needs to invoke Anthropic Claude models on Bedrock. Follow these steps to create
+          an access key that can do <em>only</em> that — nothing else in your AWS account.
+        </p>
+
+        <ol className="text-xs text-gray-300 space-y-3 list-decimal pl-5 mb-4">
+          <li>
+            <span className="font-medium">Enable Bedrock model access.</span>
+            <div className="text-gray-500 mt-1">
+              AWS Console → Bedrock → <em>Model access</em> → request access for the Anthropic
+              Claude models you plan to use (Haiku, Sonnet, Opus). Approval is usually instant.
+            </div>
+          </li>
+          <li>
+            <span className="font-medium">Create an IAM user.</span>
+            <div className="text-gray-500 mt-1">
+              IAM → Users → <em>Create user</em>. Name it something like <code className="bg-gray-800 px-1 rounded">sniff-bedrock</code>.
+              Do <em>not</em> give it console access — programmatic access only.
+            </div>
+          </li>
+          <li>
+            <span className="font-medium">Attach this inline policy.</span>
+            <div className="text-gray-500 mt-1 mb-2">
+              On the new user, add permissions → <em>Create inline policy</em> → JSON tab → paste:
+            </div>
+            <div className="relative">
+              <pre className="bg-gray-950 rounded p-2 text-[11px] text-gray-300 font-mono overflow-x-auto border border-gray-800">{policyJson}</pre>
+              <button
+                onClick={copyPolicy}
+                className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-200"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <div className="text-gray-600 text-[11px] mt-1">
+              This grants invoke-only access to Anthropic Claude models (and their inference profiles).
+              No data access, no model management, no other AWS services.
+            </div>
+          </li>
+          <li>
+            <span className="font-medium">Generate an access key.</span>
+            <div className="text-gray-500 mt-1">
+              On the user's <em>Security credentials</em> tab → <em>Create access key</em> → choose
+              <em> Application running outside AWS</em>. Copy the Access Key ID and Secret Access Key.
+            </div>
+          </li>
+          <li>
+            <span className="font-medium">Paste them into Sniff.</span>
+            <div className="text-gray-500 mt-1">
+              Close this dialog, paste the key ID and secret above, pick the region where you enabled
+              Bedrock model access (e.g. <code className="bg-gray-800 px-1 rounded">us-east-1</code>),
+              then click <em>Save Credentials</em> and <em>Test Connection</em>.
+            </div>
+          </li>
+        </ol>
+
+        <div className="text-[11px] text-gray-500 border-t border-gray-800 pt-3">
+          Keys are stored only in this app's local database on your machine. You can rotate or delete
+          the IAM user at any time to revoke access.
+        </div>
+
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded text-sm bg-gray-700 hover:bg-gray-600 text-gray-200"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

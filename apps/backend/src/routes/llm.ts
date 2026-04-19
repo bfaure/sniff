@@ -193,7 +193,7 @@ export function llmRoutes(fastify: FastifyInstance) {
     } catch (err) {
       wsHub.broadcast({
         type: 'llm:done',
-        data: { streamId, error: (err as Error).message, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        data: { streamId, error: (err as Error).message, errorCode: (err as { code?: string }).code, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
       });
     }
   });
@@ -255,7 +255,7 @@ export function llmRoutes(fastify: FastifyInstance) {
     } catch (err) {
       wsHub.broadcast({
         type: 'llm:done',
-        data: { streamId, error: (err as Error).message, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        data: { streamId, error: (err as Error).message, errorCode: (err as { code?: string }).code, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
       });
     }
   });
@@ -335,7 +335,7 @@ Be concrete and technical. Reference exact finding numbers.`,
     } catch (err) {
       wsHub.broadcast({
         type: 'llm:done',
-        data: { streamId, error: (err as Error).message, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        data: { streamId, error: (err as Error).message, errorCode: (err as { code?: string }).code, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
       });
     }
   });
@@ -391,7 +391,7 @@ Be concrete and technical. Reference exact finding numbers.`,
     } catch (err) {
       wsHub.broadcast({
         type: 'llm:done',
-        data: { streamId, error: (err as Error).message, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        data: { streamId, error: (err as Error).message, errorCode: (err as { code?: string }).code, modelId: '', inputTokens: 0, outputTokens: 0, costUsd: 0 },
       });
     }
     void fullText;

@@ -327,6 +327,25 @@ function BodyBlock({ body, bodyBase64, label, contentType, truncated, fullSize, 
   );
 }
 
+// Serialize the captured request back to an HTTP/1.1 request as it would
+// have been sent on the wire: request line, headers, blank line, body.
+function generateRawRequest(detail: ExchangeDetail): string {
+  let pathAndQuery = '/';
+  try {
+    const u = new URL(detail.url);
+    pathAndQuery = `${u.pathname}${u.search}` || '/';
+  } catch {
+    pathAndQuery = detail.url;
+  }
+  const lines = [`${detail.method} ${pathAndQuery} HTTP/1.1`];
+  for (const [k, v] of Object.entries(detail.requestHeaders)) {
+    lines.push(`${k}: ${v}`);
+  }
+  lines.push('');
+  lines.push(detail.requestBody || '');
+  return lines.join('\r\n');
+}
+
 function generateCurl(detail: ExchangeDetail): string {
   const parts = ['curl'];
   if (detail.method !== 'GET') {
@@ -718,6 +737,13 @@ export function HistoryPage() {
               <h3 className="text-[11px] text-blue-400 uppercase tracking-wider font-bold">
                 Request
               </h3>
+              <button
+                onClick={() => copyToClipboard(generateRawRequest(selected))}
+                className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500"
+                title="Copy the raw HTTP request (method, headers, body)"
+              >
+                Copy request
+              </button>
               <div className="flex-1" />
               <input
                 type="text"

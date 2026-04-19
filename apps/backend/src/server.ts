@@ -147,6 +147,12 @@ export async function createServer() {
   // Load model overrides from DB
   loadModelOverrides().catch(() => {});
 
+  // Apply saved Bedrock credentials so the LLM features work on a fresh
+  // server start without requiring the user to re-save them from Settings.
+  (await import('./routes/settings.js')).applyBedrockCredentials().catch((err) => {
+    console.error('[llm] failed to apply saved Bedrock credentials:', err?.message ?? err);
+  });
+
   // Restore persisted auto-analyzer state (enabled flag, scope mode, memory, etc.)
   autoAnalyzer.init().catch((err) => {
     console.error('[auto-analyzer] init error:', err.message);

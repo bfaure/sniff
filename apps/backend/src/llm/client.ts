@@ -11,14 +11,39 @@ import { costTracker } from './cost-tracker.js';
 
 let client: BedrockRuntimeClient | null = null;
 
+/**
+ * Sentinel error type thrown when the user has not configured AWS credentials.
+ * The renderer detects this by `code` and shows a "Set up AWS credentials"
+ * call-to-action with a deep link into Settings instead of a raw stack trace.
+ */
+export class LLMNotConfiguredError extends Error {
+  code = 'LLM_NOT_CONFIGURED' as const;
+  constructor(message = 'AWS Bedrock credentials are not configured. Open Settings → AI to add them.') {
+    super(message);
+    this.name = 'LLMNotConfiguredError';
+  }
+}
+
 export function initBedrockClient(region: string = 'us-east-1') {
   // Uses default credential chain (env vars, ~/.aws/credentials, IAM role, etc.)
   client = new BedrockRuntimeClient({ region });
 }
 
+function haveCredentials(): boolean {
+  // The AWS SDK walks env -> profile -> IMDS. We only short-circuit here on
+  // the env-var case because that's what our Settings UI wires up; any other
+  // valid source (profile, SSO, IAM role) means the SDK will succeed on its
+  // own and we don't want a false negative.
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) return true;
+  if (process.env.AWS_PROFILE) return true;
+  return false;
+}
+
 function getClient(): BedrockRuntimeClient {
+  if (!haveCredentials()) {
+    throw new LLMNotConfiguredError();
+  }
   if (!client) {
-    // Auto-init with default region
     initBedrockClient();
   }
   return client!;

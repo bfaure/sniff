@@ -4,6 +4,7 @@ import { findingsStore, type StoredFinding } from '../stores/findingsStore';
 import { useLLMStream } from '../hooks/useLLMStream';
 import { api } from '../api/client';
 import { appEvents } from '../events/appEvents';
+import { LLMNotConfigured, isLLMNotConfigured } from '../components/shared/LLMNotConfigured';
 
 // Map a finding's type/category/title to a guided-test vuln type label.
 function inferVulnType(f: StoredFinding): string {
@@ -242,7 +243,11 @@ export function FindingsPage() {
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {chainLLM.error && <div className="text-red-400 text-sm">{chainLLM.error}</div>}
+              {chainLLM.error && (
+                isLLMNotConfigured(chainLLM.error, chainLLM.errorCode)
+                  ? <LLMNotConfigured />
+                  : <div className="text-red-400 text-sm">{chainLLM.error}</div>
+              )}
               <pre className="text-sm text-gray-200 whitespace-pre-wrap break-words font-sans">
                 {chainLLM.text}
                 {chainLLM.streaming && <span className="animate-pulse text-purple-400">▍</span>}
