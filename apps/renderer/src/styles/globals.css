@@ -148,6 +148,26 @@ pre[class*="language-"] {
     background-color: var(--color-gray-950);
     color: var(--color-gray-100);
     font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Menlo', monospace;
+    /* Disable text selection on the app chrome by default — sidebars, tabs,
+       buttons, labels, etc. shouldn't get a mouse-drag highlight. The rules
+       below opt-in selection on surfaces that hold actual data the user
+       might want to copy. */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Form fields are inherently selectable. */
+  input, textarea, select, [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Captured payloads, code blocks, tables, and AI prose hold the data the
+     user is here to read — keep mouse selection on those. Pages can also
+     opt-in arbitrary regions with the `.selectable` utility. */
+  pre, code, kbd, samp, td, th, .ai-prose, .selectable {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   ::-webkit-scrollbar {

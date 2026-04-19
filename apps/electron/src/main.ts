@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, nativeTheme } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -98,6 +98,16 @@ function setupIPC() {
 
   ipcMain.handle('get-app-data-path', () => {
     return app.getPath('userData');
+  });
+
+  // Lets the renderer flip the native title-bar between light and dark when
+  // the user changes the in-app theme. On Windows this controls the
+  // immersive dark mode of the system frame; on macOS it influences vibrancy
+  // and traffic-light contrast.
+  ipcMain.handle('set-native-theme', (_event, mode: 'light' | 'dark' | 'system') => {
+    if (mode === 'light' || mode === 'dark' || mode === 'system') {
+      nativeTheme.themeSource = mode;
+    }
   });
 }
 

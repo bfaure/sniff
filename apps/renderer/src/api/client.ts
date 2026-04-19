@@ -119,7 +119,7 @@ export const api = {
         body: JSON.stringify(rule),
       }),
     analyzePending: () =>
-      request<{ queued: number }>('/api/scope/analyze-pending', { method: 'POST' }),
+      request<{ queued: number; droppedDisabled: number; autoAnalyzeEnabled: boolean }>('/api/scope/analyze-pending', { method: 'POST' }),
     analyzePendingCount: () =>
       request<{ count: number }>('/api/scope/analyze-pending/count'),
     analyzePendingList: () =>

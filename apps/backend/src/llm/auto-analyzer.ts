@@ -280,7 +280,10 @@ class AutoAnalyzer {
 
   enable() {
     this.enabled = true;
-    this.init().catch(() => {});
+    // Note: we deliberately do NOT call init() here. init() reads
+    // `auto_analyze_enabled` from the DB and assigns it to `this.enabled` —
+    // racing the upsert below could clobber `enabled` back to its previous
+    // value. Startup init in server.ts is sufficient to load persisted state.
     db.settings.upsert({
       where: { key: 'auto_analyze_enabled' },
       create: { key: 'auto_analyze_enabled', value: 'true' },
@@ -374,7 +377,10 @@ class AutoAnalyzer {
   }
 
   enqueue(exchangeId: string) {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      console.log(`[auto-analyzer] enqueue dropped (disabled): ${exchangeId}`);
+      return;
+    }
     // Roll over the daily counter if the calendar day changed
     const today = todayStr();
     if (today !== this.dailyCostDate) {
@@ -387,7 +393,21 @@ class AutoAnalyzer {
       return;
     }
     this.queue.push(exchangeId);
+    console.log(`[auto-analyzer] enqueued ${exchangeId} (queue=${this.queue.length}, processing=${this.processing})`);
     this.processQueue();
+  }
+
+  /**
+   * Surface a "we just queued N exchanges" message in the AI Activity feed.
+   * Called by routes that batch-enqueue (e.g. POST /api/scope/analyze-pending)
+   * so the user gets immediate visual confirmation, instead of having to wait
+   * for the first 'analyzing' broadcast (which can be delayed by a long queue).
+   */
+  notifyBatchQueued(count: number, reason: string) {
+    console.log(`[auto-analyzer] batch-queued ${count} exchange(s): ${reason}`);
+    this.broadcastActivity('queued', {
+      message: `Queued ${count} exchange${count !== 1 ? 's' : ''} for analysis (${reason})`,
+    });
   }
 
   private async processQueue() {
@@ -644,6 +664,22 @@ Plain prose, no markdown headings, no JSON.`;
     );
     await this.addCost(classResult.costUsd);
     this.analyzedShapes.add(shapeKey);
+
+    // Persist a marker row so the "pending analysis" filter in scope routes
+    // can tell which exchanges have already been seen by the auto-analyzer.
+    // Type prefix 'auto-' is the same prefix `analyzedIds` queries on.
+    db.analysis.create({
+      data: {
+        exchangeId,
+        modelId: classResult.modelId,
+        type: 'auto-triage',
+        prompt: '',
+        response: classResult.text,
+        inputTokens: classResult.usage.inputTokens,
+        outputTokens: classResult.usage.outputTokens,
+        costUsd: classResult.costUsd,
+      },
+    }).catch(() => {});
 
     try {
       const classified = JSON.parse(stripCodeFences(classResult.text));

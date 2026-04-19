@@ -33,6 +33,12 @@ function applyTheme(theme: Theme) {
   root.classList.add(theme);
 
   document.body.className = 'bg-gray-950 text-gray-100 antialiased';
+
+  // Tell the Electron main process to flip the native title bar to match.
+  // The bridge is only present in the packaged Electron build; in the dev
+  // browser there's no native frame to update so we no-op.
+  const bridge = (window as unknown as { sniff?: { setNativeTheme?: (m: 'light' | 'dark' | 'system') => void } }).sniff;
+  bridge?.setNativeTheme?.(theme);
 }
 
 function applyFontSize(size: FontSize) {

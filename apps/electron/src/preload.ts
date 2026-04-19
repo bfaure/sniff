@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('sniff', {
   exportFile: (filePath: string, data: string) =>
     ipcRenderer.invoke('export-file', filePath, data),
   getAppDataPath: () => ipcRenderer.invoke('get-app-data-path'),
+  setNativeTheme: (mode: 'light' | 'dark' | 'system') =>
+    ipcRenderer.invoke('set-native-theme', mode),
 });

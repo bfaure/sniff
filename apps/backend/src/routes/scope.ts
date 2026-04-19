@@ -158,13 +158,23 @@ export function scopeRoutes(fastify: FastifyInstance): void {
       orderBy: { timestamp: 'asc' },
     });
     let queued = 0;
+    let droppedDisabled = 0;
+    const enabled = autoAnalyzer.isEnabled();
     for (const ex of inScopeExchanges) {
       if (!analyzedIds.has(ex.id)) {
-        autoAnalyzer.enqueue(ex.id);
-        queued++;
+        if (!enabled) {
+          droppedDisabled++;
+        } else {
+          autoAnalyzer.enqueue(ex.id);
+          queued++;
+        }
       }
     }
-    return reply.send({ queued });
+    if (queued > 0) {
+      autoAnalyzer.notifyBatchQueued(queued, 'scope re-evaluation');
+    }
+    console.log(`[scope] analyze-pending: queued=${queued}, droppedDisabled=${droppedDisabled}, enabled=${enabled}`);
+    return reply.send({ queued, droppedDisabled, autoAnalyzeEnabled: enabled });
   });
 
   fastify.post('/api/scope/test', async (req, reply) => {

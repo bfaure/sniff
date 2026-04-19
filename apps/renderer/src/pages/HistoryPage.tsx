@@ -392,6 +392,21 @@ export function HistoryPage() {
   const [page, setPage] = useState(1);
   const [selected, _setSelected] = useState<ExchangeDetail | null>(persistedSelected);
   const setSelected = (v: ExchangeDetail | null) => { persistedSelected = v; _setSelected(v); };
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  // Once the detail panel opens (or the selection changes), the table viewport
+  // shrinks. Scroll the clicked row back into the visible portion so it isn't
+  // hidden behind the panel. `block: 'nearest'` is a no-op when the row is
+  // already fully visible, so it doesn't disrupt rows the user can already see.
+  useEffect(() => {
+    if (!selected) return;
+    const container = tableScrollRef.current;
+    if (!container) return;
+    const row = container.querySelector<HTMLElement>(`[data-row-id="${selected.id}"]`);
+    if (!row) return;
+    // Defer to next frame so the panel mount has settled and the container's
+    // visible height reflects the new layout.
+    requestAnimationFrame(() => row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  }, [selected?.id]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; exchangeId: string } | null>(null);
   const [scopeWizardUrl, setScopeWizardUrl] = useState<string | null>(null);
   const [scopeAdded, setScopeAdded] = useState<string | null>(null);
@@ -926,7 +941,7 @@ export function HistoryPage() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Table */}
-        <div className={`overflow-auto ${selected ? 'flex-1' : 'flex-1'}`}>
+        <div ref={tableScrollRef} className={`overflow-auto ${selected ? 'flex-1' : 'flex-1'}`}>
           <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
             <thead className="sticky top-0 bg-gray-900 text-gray-500 text-xs uppercase">
               <tr>
@@ -974,6 +989,7 @@ export function HistoryPage() {
               {sortedExchanges.map((ex) => (
                 <tr
                   key={ex.id}
+                  data-row-id={ex.id}
                   onClick={() => loadDetail(ex.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
