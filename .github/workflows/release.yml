@@ -39,6 +39,19 @@ jobs:
         working-directory: apps/backend
         run: npx prisma generate
 
+      - name: Generate schema.sql (used at first launch in packaged app)
+        working-directory: apps/backend
+        shell: bash
+        run: npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script > prisma/schema.sql
+
+      - name: Build shared
+        working-directory: packages/shared
+        run: npx tsc
+
+      - name: Build backend
+        working-directory: apps/backend
+        run: npx tsc
+
       - name: Build renderer
         working-directory: apps/renderer
         run: npx vite build
@@ -49,19 +62,16 @@ jobs:
 
       - name: Package (macOS)
         if: matrix.os == 'macos-latest'
-        working-directory: apps/electron
         run: npx electron-builder --mac --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
-        working-directory: apps/electron
         run: npx electron-builder --win --publish never
 
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
-        working-directory: apps/electron
         run: npx electron-builder --linux --publish never
 
       - name: Upload artifacts

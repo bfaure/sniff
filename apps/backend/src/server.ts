@@ -21,7 +21,39 @@ import { autoAnalyzer } from './llm/auto-analyzer.js';
 import { loadModelOverrides } from './llm/client.js';
 import { vectorStore } from './llm/vector-store.js';
 import { indexExchange } from './llm/rag.js';
+import { db } from './db.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import type { ExchangeSummary, InterceptedItem } from '@sniff/shared';
+
+async function ensureSchema(): Promise<void> {
+  // Probe for any known table; if it exists the schema is already applied.
+  try {
+    await db.$queryRawUnsafe(`SELECT 1 FROM "Settings" LIMIT 1`);
+    return;
+  } catch {
+    // Table missing -> apply the bundled schema below.
+  }
+
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // schema.sql lives in apps/backend/prisma/. From dist/server.js that's ../prisma/;
+  // from src/server.ts it's also ../prisma/. Same relative path either way.
+  const schemaPath = path.resolve(here, '..', 'prisma', 'schema.sql');
+  if (!fs.existsSync(schemaPath)) {
+    console.error('[db] schema.sql not found at', schemaPath);
+    return;
+  }
+  const sql = fs.readFileSync(schemaPath, 'utf8');
+  const statements = sql
+    .split(/;\s*\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !s.startsWith('--'));
+  for (const stmt of statements) {
+    await db.$executeRawUnsafe(stmt);
+  }
+  console.log(`[db] applied schema (${statements.length} statements)`);
+}
 
 // DNS-rebinding protection: the backend binds to 127.0.0.1 only, but browsers
 // can still reach it via DNS rebinding. Reject requests whose Host header does
@@ -43,18 +75,11 @@ export async function createServer() {
     }
   });
 
-  // Ensure DB schema is up to date (adds new tables without dropping existing data)
-  try {
-    const { execSync } = await import('child_process');
-    const { fileURLToPath } = await import('url');
-    const path = await import('path');
-    const backendDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-    execSync('npx prisma db push --skip-generate', {
-      cwd: backendDir,
-      env: { ...process.env },
-      stdio: 'pipe',
-    });
-  } catch { /* schema already in sync */ }
+  // Ensure DB schema exists. In dev, `prisma db push` keeps the schema in sync;
+  // in a packaged app the prisma CLI isn't available, so we ship a precomputed
+  // schema.sql (generated at build time via `prisma migrate diff`) and execute
+  // it once against an empty database.
+  await ensureSchema();
 
   // WebSocket support
   await fastify.register(websocket);

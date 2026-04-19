@@ -8,13 +8,37 @@ const isDev = !app.isPackaged;
 const SERVER_PORT = 47120;
 const RENDERER_DEV_PORT = 5173;
 
-async function startBackend() {
-  // Dynamic imports so the TS compiler doesn't traverse backend ESM files
-  // (electron builds as CommonJS; backend runs as ESM at runtime).
-  const backendSpec = '@sniff/backend/src/proxy/ca.js';
-  const serverSpec = '@sniff/backend/src/server.js';
+// In a packaged build, app.asar contains compiled JS but the backend's prisma
+// engine and other native bits are unpacked under app.asar.unpacked. The
+// renderer's static assets are copied to resources/renderer/ via extraResources.
+const RESOURCES_DIR = isDev ? path.join(__dirname, '..') : process.resourcesPath;
 
-  const { setCertDir } = (await import(backendSpec)) as { setCertDir: (dir: string) => void };
+function rendererIndexPath(): string {
+  if (isDev) {
+    // Not used in dev (we load the Vite dev URL), but kept for completeness.
+    return path.join(__dirname, '..', '..', 'renderer', 'dist', 'index.html');
+  }
+  return path.join(RESOURCES_DIR, 'renderer', 'index.html');
+}
+
+function configureBackendEnv(): void {
+  // SQLite database lives under userData so it survives upgrades and is writable.
+  const userData = app.getPath('userData');
+  const dbPath = path.join(userData, 'sniff.db');
+  // Prisma file URL on Windows must use forward slashes.
+  process.env.DATABASE_URL = `file:${dbPath.replace(/\\/g, '/')}`;
+  process.env.SNIFF_SERVER_PORT = String(SERVER_PORT);
+}
+
+async function startBackend() {
+  configureBackendEnv();
+
+  // Compiled backend lives at @sniff/backend/dist/. Use dynamic imports because
+  // electron's main bundle is CommonJS and the backend is ESM.
+  const caSpec = '@sniff/backend/dist/proxy/ca.js';
+  const serverSpec = '@sniff/backend/dist/server.js';
+
+  const { setCertDir } = (await import(caSpec)) as { setCertDir: (dir: string) => void };
   setCertDir(path.join(app.getPath('userData'), 'certificates'));
 
   const { createServer } = (await import(serverSpec)) as {
@@ -44,7 +68,7 @@ function createWindow() {
     mainWindow.loadURL(`http://localhost:${RENDERER_DEV_PORT}`);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
+    mainWindow.loadFile(rendererIndexPath());
   }
 
   mainWindow.on('closed', () => {
@@ -73,16 +97,33 @@ function setupIPC() {
   });
 }
 
-app.whenReady().then(async () => {
-  setupIPC();
-  await startBackend();
-  createWindow();
+// If startBackend() rejects, the unhandled promise will silently leave the app
+// without a window — show the error and quit so the failure mode is visible.
+function showFatal(err: unknown): void {
+  const message = err instanceof Error ? `${err.message}\n\n${err.stack ?? ''}` : String(err);
+  console.error('[electron] fatal:', message);
+  try {
+    dialog.showErrorBox('Sniff failed to start', message);
+  } catch {
+    /* dialog may not be ready */
+  }
+  app.exit(1);
+}
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+app.whenReady().then(async () => {
+  try {
+    setupIPC();
+    await startBackend();
+    createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  } catch (err) {
+    showFatal(err);
+  }
 });
 
 app.on('window-all-closed', () => {
