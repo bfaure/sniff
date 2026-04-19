@@ -8,9 +8,9 @@ const isDev = !app.isPackaged;
 const SERVER_PORT = 47120;
 const RENDERER_DEV_PORT = 5173;
 
-// In a packaged build, app.asar contains compiled JS but the backend's prisma
-// engine and other native bits are unpacked under app.asar.unpacked. The
-// renderer's static assets are copied to resources/renderer/ via extraResources.
+// Packaged app lives at resources/app/ (asar disabled — see electron-builder.yml
+// for why). Renderer static assets ship separately at resources/renderer/ via
+// extraResources so the main process can mainWindow.loadFile() them directly.
 const RESOURCES_DIR = isDev ? path.join(__dirname, '..') : process.resourcesPath;
 
 function rendererIndexPath(): string {
