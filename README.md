@@ -2,51 +2,64 @@
 
 **An LLM-integrated interception proxy for paired pentesting.**
 
-Sniff is an HTTP(S) interception proxy with a dedicated AI co-pilot built in. It captures the traffic passing through your browser, surfaces vulnerabilities as they appear, and lets you talk to an LLM with full session context — all locally, with your own AWS Bedrock API key.
+Sniff is an HTTP(S) interception proxy with a dedicated AI co-pilot wired through every tool. It captures the traffic passing through your browser, **the AI watches it live**, surfaces vulnerabilities as they appear, and lets you talk to a model with full session context — site map, scope, observations, recent traffic, prior findings — all locally, with your own AWS Bedrock API key.
 
 ![History view](docs/screenshots/history.png)
 
 ## Why
 
-Existing proxy tools treat LLMs as an afterthought. Sniff flips that: every intercepted request is a candidate for analysis, every finding is generated with real evidence from real traffic, and the AI has direct access to your site map, scope, and session observations.
+Existing proxy tools treat LLMs as an afterthought — a side panel, a copy-paste loop. Sniff flips that:
 
-- **Bring your own key.** AWS Bedrock only right now (OpenAI/Anthropic API coming). Your credentials never leave your machine.
+- **The AI is always reading.** An auto-analyzer queues every in-scope request, triages it, and escalates anything suspicious to a deeper model. You don't trigger it; it's just running while you browse the target.
+- **Findings are evidence-backed.** Every vulnerability surfaced points back to the exact request and response that produced it, with a CVSS score, OWASP category, and a concrete next test to run.
+- **Chat sees what you see.** Project-scoped conversation has full visibility into your scope rules, the site map, all findings so far, the analyzer's running observations, and recent traffic — so when you ask "what should I try next," the answer is grounded in your specific session.
+- **AI Test mode in Replay.** Open a request, hit the AI bubble, pick a vuln class, and the model walks you through a guided exploit — proposing payloads, reading your responses, suggesting follow-ups. Auto-mode does the same loop without you in the seat.
+- **Bring your own key.** AWS Bedrock today (OpenAI/Anthropic API coming). Credentials never leave your machine.
 - **All data is local.** SQLite database, local CA, local cert store. No telemetry.
-- **Open source, MIT-ish.** Fork it, extend it, add your own prompts.
 
-## Features
+## AI features at a glance
 
-| Tool | What it does |
-|------|------|
-| **Proxy / History** | Live MITM traffic capture with a searchable, filterable, virtualized history. |
-| **Hold** | Pin requests for later, scoped per project. |
-| **Failed** | Dedicated tab for proxy errors (TLS failures, DNS failures, timeouts) so History stays clean. |
-| **Replay** | Tabbed request editor. Resend, follow redirects with cookie forwarding, download raw/decoded response bodies, diff history. |
-| **Fuzzer** | Template-based fuzzing (Single, Parallel, Paired, Cartesian attack modes). LLM can generate context-aware payloads. |
-| **Decoder** | Stackable encode/decode chain (base64, URL, HTML, hex, JWT, gzip). |
-| **Comparer** | Side-by-side diff of requests or responses. |
-| **Site Map** | Tree view of discovered hosts and paths from history. |
-| **Scope** | Include/exclude rules with glob patterns, drag-to-reorder. |
-| **Findings** | Deduplicated list of vulnerabilities the AI has discovered, grouped by host and sorted by CVSS. |
-| **AI Activity** | Live feed of what the auto-analyzer is doing. Session observations update as it reasons about the target. |
-| **Chat** | Project-scoped conversation with full context — scope, findings, endpoints, observations, recent traffic. Markdown rendering, action cards for "Send to Replay." |
-
-### Screenshots
-
-**Findings** — AI-discovered vulnerabilities, grouped by host, sorted by CVSS:
+**Findings — auto-discovered vulnerabilities, grouped by host, sorted by CVSS:**
 ![Findings view](docs/screenshots/findings.png)
 
-**AI Activity** — live analyzer queue with session observations about the target:
+Every row is something the analyzer found in your traffic. Severity, CVSS, OWASP category, evidence, and a "next test to confirm" — all generated from the actual request/response, not guessed.
+
+**AI Activity — the analyzer's live feed and accumulating session memory:**
 ![AI Activity view](docs/screenshots/activity.png)
 
-**Chat** — project-level conversation with action cards for follow-ups:
+Toggle Auto-Analyze on and the queue runs in the background. The right-hand "Session Observations" panel is the model's running notebook — patterns it noticed across requests (auth scheme, ID conventions, missing headers, injection candidates) which then feed back into every subsequent analysis, finding, and chat answer.
+
+**Chat — project-scoped conversation with action cards:**
 ![Chat view](docs/screenshots/chat.png)
 
-**Replay** — tabbed request editor with follow-redirect and response download:
+Ask "what's the highest-priority attack vector?" and the model answers with concrete steps tied to your captured traffic. Action blocks like **Send to Replay** spin up a pre-loaded request editor in one click — no copy-paste between tools.
+
+**Replay with AI Test — guided exploitation per vulnerability class:**
 ![Replay view](docs/screenshots/replay.png)
 
-**Site Map** — discovered endpoints as a tree:
+The tabbed request editor you'd expect, plus a floating AI Test panel: pick a vuln type (SQLi, XSS, IDOR, SSRF, JWT, etc.), and the model proposes payloads, watches your response, and steers you to the next probe. Switch to **Auto-Analyze** mode and it runs the same loop unattended.
+
+**Site Map — discovered endpoints as a tree, the AI's view of the target:**
 ![Site Map view](docs/screenshots/sitemap.png)
+
+The same structure the LLM sees when it builds its session observations. Both you and the model are reading from the same map.
+
+## All tools
+
+| Tool | What it does | AI involvement |
+|------|------|------|
+| **Proxy / History** | Live MITM traffic capture with a searchable, filterable, virtualized history. Per-project request numbering. | Every in-scope request feeds the auto-analyzer queue. |
+| **Hold** | Pin requests for later, scoped per project. | — |
+| **Failed** | Dedicated tab for proxy errors (TLS failures, DNS failures, timeouts) so History stays clean. | — |
+| **Replay** | Tabbed request editor. Resend, follow redirects with cookie forwarding, download raw/decoded response bodies, diff against history. | **AI Test** panel — guided & auto modes for every vuln class. |
+| **Fuzzer** | Template-based fuzzing (Single, Parallel, Paired, Cartesian attack modes). | LLM generates context-aware payload lists. |
+| **Decoder** | Stackable encode/decode chain (base64, URL, HTML, hex, JWT, gzip). | — |
+| **Comparer** | Side-by-side diff of requests or responses. | — |
+| **Site Map** | Tree view of discovered hosts and paths from history. | Read by chat & analyzer for project context. |
+| **Scope** | Include/exclude rules with glob patterns, drag-to-reorder. | Defines what the auto-analyzer is allowed to look at. |
+| **Findings** | Deduplicated list of vulnerabilities the AI has discovered, grouped by host and sorted by CVSS. | **Entirely AI-generated**, with evidence and suggested follow-up tests. |
+| **AI Activity** | Live feed of analyzer events; running session observations on the right. | The analyzer's heartbeat. |
+| **Chat** | Project-scoped conversation with full context — scope, findings, endpoints, observations, recent traffic. Markdown rendering, action cards for Send to Replay / Send to Fuzzer. | Conversational interface to the project state. |
 
 ## Install
 
@@ -106,18 +119,18 @@ Download it from **Settings → Certificate → Download CA**, then:
 - **macOS**: open the `.pem`, add to Keychain, mark as "Always Trust" for SSL.
 - **Linux**: copy to `/usr/local/share/ca-certificates/` and run `update-ca-certificates`.
 - **Windows**: `certmgr.msc` → Trusted Root Certification Authorities → Import.
-- **Firefox**: Settings → Certificates → View Certificates → Authorities → Import.
+- **Firefox**: Settings → Certificates → View Certificates → Authorities → Import. Make sure to check **Trust this CA to identify websites**.
 
-### 3. Add your AWS Bedrock credentials (optional, enables AI features)
+### 3. Add your AWS Bedrock credentials (enables AI features)
 
-In **Settings**, paste an AWS access key, secret, and region that has Bedrock model access. Sniff stores them in a local SQLite database — they never leave your machine.
+In **Settings**, paste an AWS access key, secret, and region that has Bedrock model access — or click **Load from file…** and point at your `~/.aws/credentials`, an IAM console CSV download, or a JSON credential file. Sniff stores them in a local SQLite database; they never leave your machine.
 
 Minimum models enabled on your account:
 - **Fast** (`claude-haiku-4-5` or similar) — used for cheap, high-volume auto-analysis.
-- **Reasoning** (`claude-sonnet-4-6`) — used for deeper findings and chat.
-- **Deep** (`claude-opus-4-7`) — used for the most complex analysis (optional).
+- **Reasoning** (`claude-sonnet-4-6`) — used for deeper findings, chat, and AI Test in Replay.
+- **Deep** (`claude-opus-4-7`) — escalation tier for the most complex analyses (optional).
 
-Without credentials, Sniff still works as a plain interception proxy; AI features are hidden.
+Without credentials Sniff still works as a plain interception proxy; AI tabs gracefully degrade with a "configure to enable" banner.
 
 ## Architecture
 
@@ -129,6 +142,7 @@ Without credentials, Sniff still works as a plain interception proxy; AI feature
 │  - History, Replay, Fuzzer...       │  + WS │  - Routes           │
 │  - Findings, AI Activity, Chat      │       │  - WebSocket hub    │
 └─────────────────────────────────────┘       │  - Proxy engine     │
+                                              │  - Auto-analyzer    │
                                               │  - LLM client       │
                                               │    (Bedrock)        │
                                               │  - SQLite via       │
@@ -158,6 +172,10 @@ sniff/
 │   └── shared/    Types & constants shared between backend and renderer
 └── scripts/       dev / build / test wrappers
 ```
+
+## Projects
+
+Sniff stores everything (history, findings, scope, replay tabs, AI memory) in a per-project SQLite file under `~/.sniff/projects/`. Switch projects from the sidebar **Project:** menu — each one keeps its own credentials, scope, observations, and chat history. The menu shows current disk usage per project, and "Save As" snapshots the current state.
 
 ## Development
 

@@ -21,6 +21,8 @@ export interface ExchangeData {
 
 export interface ExchangeSummary {
   id: string;
+  // Per-project request number, derived from SQLite rowid (1 = first request, N = newest).
+  seq: number;
   method: string;
   host: string;
   path: string;

@@ -22,6 +22,12 @@ interface ProjectMeta {
   dbFile: string; // filename within PROJECTS_DIR
 }
 
+interface ProjectMetaWithSize extends ProjectMeta {
+  // Bytes on disk. For the active project this reflects the live working DB
+  // (DEFAULT_DB); for inactive projects it's the saved snapshot file.
+  sizeBytes: number;
+}
+
 interface ProjectsIndex {
   activeProjectId: string | null;
   projects: ProjectMeta[];
@@ -48,9 +54,20 @@ function generateId(): string {
   return `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function fileSize(p: string): number {
+  try { return fs.statSync(p).size; } catch { return 0; }
+}
+
 export const projectManager = {
-  list(): ProjectMeta[] {
-    return readIndex().projects;
+  list(): ProjectMetaWithSize[] {
+    const index = readIndex();
+    return index.projects.map((p) => ({
+      ...p,
+      sizeBytes:
+        p.id === index.activeProjectId
+          ? fileSize(DEFAULT_DB)
+          : fileSize(path.join(PROJECTS_DIR, p.dbFile)),
+    }));
   },
 
   getActive(): { id: string | null; name: string | null } {

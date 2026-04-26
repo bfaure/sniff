@@ -15,7 +15,7 @@ import { useNavigate } from '../App';
 import { buildScopeOptions, checkExistingCoverage, type ScopeRule } from '../utils/scopeOptions';
 import type { ExchangeSummary } from '@sniff/shared';
 
-type SortKey = 'method' | 'host' | 'path' | 'status' | 'size' | 'time' | 'timestamp';
+type SortKey = 'seq' | 'method' | 'host' | 'path' | 'status' | 'size' | 'time' | 'timestamp';
 type SortDir = 'asc' | 'desc';
 
 // Persist filter state across tab switches (module-level, survives remounts)
@@ -25,7 +25,7 @@ const persistedFilters = {
   statusFilter: '',
   hostFilter: '',
   scopeFilter: 'all' as 'all' | 'in' | 'out',
-  sortKey: 'timestamp' as SortKey,
+  sortKey: 'seq' as SortKey,
   sortDir: 'desc' as SortDir,
   hidePatterns: [] as string[],
 };
@@ -70,6 +70,7 @@ interface SearchResult extends ExchangeSummary {
 let persistedSelected: ExchangeDetail | null = null;
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  seq: 64,
   method: 72,
   host: 180,
   path: 260,
@@ -597,6 +598,7 @@ export function HistoryPage() {
     sorted.sort((a, b) => {
       const av: string | number = (() => {
         switch (sortKey) {
+          case 'seq': return a.seq ?? -1;
           case 'method': return a.method;
           case 'host': return a.host;
           case 'path': return a.path;
@@ -608,6 +610,7 @@ export function HistoryPage() {
       })();
       const bv: string | number = (() => {
         switch (sortKey) {
+          case 'seq': return b.seq ?? -1;
           case 'method': return b.method;
           case 'host': return b.host;
           case 'path': return b.path;
@@ -630,7 +633,7 @@ export function HistoryPage() {
       setSortDir(next);
     } else {
       setSortKey(key);
-      setSortDir(key === 'timestamp' ? 'desc' : 'asc');
+      setSortDir(key === 'timestamp' || key === 'seq' ? 'desc' : 'asc');
     }
   };
 
@@ -697,6 +700,7 @@ export function HistoryPage() {
 
   // Columns list for the header
   const columns: { key: SortKey; label: string; align: 'left' | 'right' | 'center' }[] = [
+    { key: 'seq', label: '#', align: 'right' },
     { key: 'method', label: 'Method', align: 'left' },
     { key: 'host', label: 'Host', align: 'left' },
     { key: 'path', label: 'Path', align: 'left' },
@@ -747,18 +751,21 @@ export function HistoryPage() {
         {/* Content */}
         <div className="flex-1 overflow-hidden flex divide-x divide-gray-800">
           {/* Request side */}
-          <div className="flex-1 overflow-auto p-3 min-w-0">
-            <div className="flex items-center gap-2 mb-2 sticky top-0 bg-gray-900/90 py-1 z-[1]">
+          <div className="flex-1 overflow-auto pt-0 px-3 pb-3 min-w-0">
+            <div className="flex items-center gap-2 sticky top-0 bg-gray-900 py-2 mb-2 z-[1]">
               <h3 className="text-[11px] text-blue-400 uppercase tracking-wider font-bold">
                 Request
               </h3>
               <button
-                onClick={() => copyToClipboard(generateRawRequest(selected))}
+                onClick={() => copyToClipboard(selected.requestBody || '')}
                 className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500"
-                title="Copy the raw HTTP request (method, headers, body)"
+                title="Copy the request body"
               >
-                Copy request
+                Copy request body
               </button>
+              {selected.requestBodyFullSize != null && (
+                <span className="text-[10px] text-gray-600">{formatBytes(selected.requestBodyFullSize)}</span>
+              )}
               <div className="flex-1" />
               <input
                 type="text"
@@ -785,8 +792,8 @@ export function HistoryPage() {
           </div>
 
           {/* Response side */}
-          <div className="flex-1 overflow-auto p-3 min-w-0">
-            <div className="flex items-center gap-2 mb-2 sticky top-0 bg-gray-900/90 py-1 z-[1]">
+          <div className="flex-1 overflow-auto pt-0 px-3 pb-3 min-w-0">
+            <div className="flex items-center gap-2 sticky top-0 bg-gray-900 py-2 mb-2 z-[1]">
               <h3 className="text-[11px] text-emerald-400 uppercase tracking-wider font-bold">
                 Response
               </h3>
@@ -798,6 +805,9 @@ export function HistoryPage() {
               )}
               {selected.duration != null && (
                 <span className="text-[10px] text-gray-600">{selected.duration}ms</span>
+              )}
+              {selected.responseBodyFullSize != null && (
+                <span className="text-[10px] text-gray-600">{formatBytes(selected.responseBodyFullSize)}</span>
               )}
               <div className="flex-1" />
               <input
@@ -1021,6 +1031,9 @@ export function HistoryPage() {
                           : 'border-gray-600 hover:border-gray-400'
                       }`} />
                     </div>
+                  </td>
+                  <td style={colStyle('seq')} className="px-3 py-1 text-right text-gray-500 text-xs font-mono overflow-hidden tabular-nums">
+                    {ex.seq ?? '-'}
                   </td>
                   <td style={colStyle('method')} className="px-3 py-1 overflow-hidden">
                     <span className="font-bold text-xs text-blue-400">{ex.method}</span>

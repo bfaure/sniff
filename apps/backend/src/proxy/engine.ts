@@ -581,8 +581,17 @@ export class ProxyEngine {
 
       this.exchangeCount++;
 
+      // SQLite rowid increments on insert and is unique per project DB,
+      // giving us a stable per-project request number from 1..N.
+      const seqRows = await db.$queryRawUnsafe<Array<{ seq: bigint | number }>>(
+        'SELECT rowid AS seq FROM Exchange WHERE id = ?',
+        exchange.id,
+      );
+      const seq = Number(seqRows[0]?.seq ?? 0);
+
       const summary: ExchangeSummary = {
         id: exchange.id,
+        seq,
         method: exchange.method,
         host: exchange.host,
         path: exchange.path,

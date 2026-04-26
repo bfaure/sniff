@@ -85,6 +85,19 @@ export function historyRoutes(fastify: FastifyInstance): void {
       db.exchange.count({ where }),
     ]);
 
+    // Map each row to its SQLite rowid, which serves as the per-project request
+    // number (rowid auto-increments on insert and the working DB is swapped per
+    // project, so the value is meaningful only inside that project).
+    const seqById = new Map<string, number>();
+    if (exchanges.length > 0) {
+      const placeholders = exchanges.map(() => '?').join(',');
+      const seqRows = await db.$queryRawUnsafe<Array<{ id: string; seq: bigint | number }>>(
+        `SELECT id, rowid AS seq FROM Exchange WHERE id IN (${placeholders})`,
+        ...exchanges.map((e) => e.id),
+      );
+      for (const r of seqRows) seqById.set(r.id, Number(r.seq));
+    }
+
     const summaries: ExchangeSummary[] = exchanges.map((e) => {
       let contentType: string | null = null;
       if (e.responseHeaders) {
@@ -95,6 +108,7 @@ export function historyRoutes(fastify: FastifyInstance): void {
       }
       return {
         id: e.id,
+        seq: seqById.get(e.id) ?? 0,
         method: e.method,
         host: e.host,
         path: e.path,
@@ -225,6 +239,7 @@ export function historyRoutes(fastify: FastifyInstance): void {
 
     const rows = await db.$queryRawUnsafe<Array<{
       id: string;
+      seq: bigint | number;
       method: string;
       host: string;
       path: string;
@@ -238,7 +253,7 @@ export function historyRoutes(fastify: FastifyInstance): void {
       highlighted: number;
       matchField: string;
     }>>(
-      `SELECT id, method, host, path, statusCode, requestSize, responseSize, duration, timestamp, responseHeaders, inScope, highlighted,
+      `SELECT id, rowid AS seq, method, host, path, statusCode, requestSize, responseSize, duration, timestamp, responseHeaders, inScope, highlighted,
         CASE
           WHEN url LIKE ? THEN 'url'
           WHEN host LIKE ? THEN 'host'
@@ -281,6 +296,7 @@ export function historyRoutes(fastify: FastifyInstance): void {
       }
       return {
         id: e.id,
+        seq: Number(e.seq),
         method: e.method,
         host: e.host,
         path: e.path,

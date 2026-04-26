@@ -7,6 +7,15 @@ interface Project {
   description: string;
   createdAt: string;
   updatedAt: string;
+  sizeBytes?: number;
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export function ProjectSelector() {
@@ -193,20 +202,25 @@ export function ProjectSelector() {
                       {activeProject.id === proj.id && (
                         <span className="text-emerald-400 text-[10px]">*</span>
                       )}
-                      {proj.name}
+                      <span className="truncate">{proj.name}</span>
                     </div>
                     <div className="text-[10px] text-gray-600 truncate">
                       {new Date(proj.updatedAt).toLocaleDateString()} · {proj.description || 'No description'}
                     </div>
                   </button>
-                  {activeProject.id !== proj.id && (
-                    <button
-                      onClick={() => handleDelete(proj.id, proj.name)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 text-[10px] shrink-0"
-                    >
-                      Del
-                    </button>
-                  )}
+                  <span className="text-[10px] text-gray-500 font-mono shrink-0 tabular-nums w-16 text-right">
+                    {proj.sizeBytes != null ? formatBytes(proj.sizeBytes) : ''}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(proj.id, proj.name)}
+                    className={`text-gray-600 hover:text-red-400 text-[10px] shrink-0 w-6 text-right ${
+                      activeProject.id === proj.id
+                        ? 'invisible'
+                        : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    Del
+                  </button>
                 </div>
               ))}
             </div>

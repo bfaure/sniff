@@ -18,13 +18,14 @@
   --color-gray-950: var(--theme-gray-950);
 }
 
-/* Dark theme (default) — standard Tailwind gray values */
+/* Dark theme (default) — text-end (50-400) brightened for readability against
+   the dark backgrounds; structural grays (500-950) left at Tailwind defaults. */
 :root, .dark {
-  --theme-gray-50: #f9fafb;
-  --theme-gray-100: #f3f4f6;
-  --theme-gray-200: #e5e7eb;
-  --theme-gray-300: #d1d5db;
-  --theme-gray-400: #9ca3af;
+  --theme-gray-50: #ffffff;
+  --theme-gray-100: #ffffff;
+  --theme-gray-200: #f3f4f6;
+  --theme-gray-300: #e5e7eb;
+  --theme-gray-400: #c4cad3;
   --theme-gray-500: #6b7280;
   --theme-gray-600: #4b5563;
   --theme-gray-700: #374151;

@@ -1,8 +1,89 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 import { PillToggle } from '../components/shared/PillToggle';
 import { useTheme } from '../hooks/useTheme';
 import { AVAILABLE_MODELS, DEFAULT_MODEL_TIERS } from '@sniff/shared';
+
+// Parse the three formats AWS hands out: the ~/.aws/credentials INI file,
+// the "New_Access_Key.csv" the IAM console downloads, and the JSON some CLI
+// tools emit (sts get-session-token, etc.). Prefers the [default] profile
+// when an INI has multiple sections.
+function parseAwsCredentialsFile(content: string): { accessKeyId?: string; secretAccessKey?: string; region?: string } | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+
+  // JSON
+  if (trimmed.startsWith('{')) {
+    try {
+      const j = JSON.parse(trimmed);
+      const root = j.Credentials || j;
+      const accessKeyId = root.AccessKeyId || root.accessKeyId || root.access_key_id || root.aws_access_key_id;
+      const secretAccessKey = root.SecretAccessKey || root.secretAccessKey || root.secret_access_key || root.aws_secret_access_key;
+      const region = root.Region || root.region || root.aws_default_region || root.aws_region;
+      if (accessKeyId && secretAccessKey) return { accessKeyId, secretAccessKey, region };
+    } catch { /* fall through */ }
+  }
+
+  // INI (~/.aws/credentials, ~/.aws/config)
+  if (trimmed.includes('aws_access_key_id') || /^\[.+\]/m.test(trimmed)) {
+    const profiles: Record<string, { accessKeyId?: string; secretAccessKey?: string; region?: string }> = {};
+    let section = 'default';
+    profiles[section] = {};
+    for (const rawLine of trimmed.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+      const sectionMatch = line.match(/^\[(.+)\]$/);
+      if (sectionMatch) {
+        section = sectionMatch[1].replace(/^profile\s+/, '').trim();
+        if (!profiles[section]) profiles[section] = {};
+        continue;
+      }
+      const eqIdx = line.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = line.slice(0, eqIdx).trim().toLowerCase();
+      const value = line.slice(eqIdx + 1).trim();
+      const p = profiles[section];
+      if (key === 'aws_access_key_id') p.accessKeyId = value;
+      else if (key === 'aws_secret_access_key') p.secretAccessKey = value;
+      else if (key === 'region' || key === 'aws_default_region') p.region = value;
+    }
+    if (profiles.default?.accessKeyId && profiles.default?.secretAccessKey) return profiles.default;
+    for (const name of Object.keys(profiles)) {
+      const p = profiles[name];
+      if (p.accessKeyId && p.secretAccessKey) return p;
+    }
+  }
+
+  // CSV (AWS console "Download .csv file")
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length >= 2 && lines[0].includes(',')) {
+    const splitCsv = (row: string) => row.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+    const headers = splitCsv(lines[0]).map((h) => h.toLowerCase());
+    const values = splitCsv(lines[1]);
+    const akiIdx = headers.findIndex((h) => h.includes('access key id') || h === 'accesskeyid');
+    const sakIdx = headers.findIndex((h) => h.includes('secret access key') || h === 'secretaccesskey');
+    if (akiIdx >= 0 && sakIdx >= 0 && values[akiIdx] && values[sakIdx]) {
+      return { accessKeyId: values[akiIdx], secretAccessKey: values[sakIdx] };
+    }
+  }
+
+  // Plain two-line format: an AWS key ID prefix on one line, the secret on
+  // the next. Access key IDs are AKIA* (long-term) or ASIA* (temporary),
+  // 16-128 alphanumeric chars; secret keys are typically ~40 base64-ish chars.
+  const tokens = lines
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#') && !l.startsWith(';'));
+  const akiRegex = /^(AKIA|ASIA)[A-Z0-9]{12,124}$/;
+  const secretRegex = /^[A-Za-z0-9/+=]{30,}$/;
+  for (let i = 0; i < tokens.length; i++) {
+    if (akiRegex.test(tokens[i])) {
+      const next = tokens.slice(i + 1).find((t) => secretRegex.test(t) && !akiRegex.test(t));
+      if (next) return { accessKeyId: tokens[i], secretAccessKey: next };
+    }
+  }
+
+  return null;
+}
 
 export function SettingsPage() {
   const { theme, setTheme, fontSize, setFontSize, fontSizes } = useTheme();
@@ -46,6 +127,35 @@ export function SettingsPage() {
   // Saved-credential status (separate from the form state so we can show
   // "saved ending in ...ABCD" and offer a Clear button).
   const [credStatus, setCredStatus] = useState<{ hasAccessKeyId: boolean; hasSecretAccessKey: boolean; accessKeyIdSuffix: string } | null>(null);
+
+  // File-load state for AWS credential file picker
+  const credFileInputRef = useRef<HTMLInputElement>(null);
+  const [credLoadMessage, setCredLoadMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  const handleCredFile = async (file: File) => {
+    setCredLoadMessage(null);
+    try {
+      const text = await file.text();
+      const parsed = parseAwsCredentialsFile(text);
+      if (!parsed || !parsed.accessKeyId || !parsed.secretAccessKey) {
+        setCredLoadMessage({
+          kind: 'error',
+          text: `Couldn't find AWS credentials in ${file.name}. Supported: ~/.aws/credentials, the IAM "Download .csv" file, or JSON with AccessKeyId/SecretAccessKey.`,
+        });
+        return;
+      }
+      setBedrockKeyId(parsed.accessKeyId);
+      setBedrockSecret(parsed.secretAccessKey);
+      if (parsed.region) setBedrockRegion(parsed.region);
+      setCredentialStatus('idle');
+      setCredLoadMessage({
+        kind: 'success',
+        text: `Loaded from ${file.name}${parsed.region ? ` (region ${parsed.region})` : ''}. Click Save to persist.`,
+      });
+    } catch (err) {
+      setCredLoadMessage({ kind: 'error', text: `Failed to read file: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  };
 
   // Load settings on mount
   useEffect(() => {
@@ -342,7 +452,30 @@ export function SettingsPage() {
             >
               {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Test Connection'}
             </button>
+            <button
+              onClick={() => credFileInputRef.current?.click()}
+              className="px-4 py-1.5 rounded text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 font-medium"
+              title="Load credentials from a file (~/.aws/credentials, IAM CSV download, or JSON)"
+            >
+              Load from file…
+            </button>
+            <input
+              ref={credFileInputRef}
+              type="file"
+              accept=".csv,.json,.txt,.ini,.conf,credentials,*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCredFile(file);
+                e.target.value = ''; // allow re-selecting the same file
+              }}
+            />
           </div>
+          {credLoadMessage && (
+            <p className={`text-xs ${credLoadMessage.kind === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {credLoadMessage.text}
+            </p>
+          )}
           {testStatus === 'error' && (
             <p className="text-xs text-red-400">{testError}</p>
           )}
